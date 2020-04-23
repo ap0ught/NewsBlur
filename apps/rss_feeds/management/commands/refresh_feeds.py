@@ -9,7 +9,6 @@ from utils.management_functions import daemonize
 import django
 import socket
 import datetime
-import redis
 
 
 class Command(BaseCommand):
@@ -33,8 +32,6 @@ class Command(BaseCommand):
         if options['daemonize']:
             daemonize()
         
-        options['fake'] = bool(MStatistics.get('fake_fetch'))
-        
         settings.LOG_TO_STREAM = True
         now = datetime.datetime.utcnow()
         
@@ -53,13 +50,14 @@ class Command(BaseCommand):
             feeds = Feed.objects.all()
         elif options['username']:
             feeds = Feed.objects.filter(subscribers__user=User.objects.get(username=options['username']))
+        elif options['feed']:
+            feeds = Feed.objects.filter(pk=options['feed'])
         else:
             feeds = Feed.objects.filter(next_scheduled_update__lte=now, active=True)
         
         feeds = feeds.order_by('?')
         
         for f in feeds:
-            f.queued_date = datetime.datetime.utcnow()
             f.set_next_scheduled_update()
         
         num_workers = min(len(feeds), options['workerthreads'])
@@ -67,7 +65,8 @@ class Command(BaseCommand):
             num_workers = 1
         
         options['compute_scores'] = True
-        options['quick'] = ".5"
+        options['quick'] = float(MStatistics.get('quick_fetch', 0))
+        options['updates_off'] = MStatistics.get('updates_off', False)
         
         disp = feed_fetcher.Dispatcher(options, num_workers)        
         

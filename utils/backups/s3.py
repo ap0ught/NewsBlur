@@ -1,10 +1,11 @@
 from boto.s3.connection import S3Connection
+from boto.s3.connection import OrdinaryCallingFormat
 from boto.s3.key import Key
 import os
 import sys
 
-if '/home/sclay/newsblur' not in ' '.join(sys.path):
-    sys.path.append("/home/sclay/newsblur")
+if '/srv/newsblur' not in ' '.join(sys.path):
+    sys.path.append("/srv/newsblur")
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
 from django.conf import settings
@@ -13,16 +14,16 @@ ACCESS_KEY  = settings.S3_ACCESS_KEY
 SECRET      = settings.S3_SECRET
 BUCKET_NAME = settings.S3_BACKUP_BUCKET  # Note that you need to create this bucket first
 
-def save_file_in_s3(filename):
-    conn   = S3Connection(ACCESS_KEY, SECRET)
+def save_file_in_s3(filename, name=None):
+    conn   = S3Connection(ACCESS_KEY, SECRET, calling_format=OrdinaryCallingFormat())
     bucket = conn.get_bucket(BUCKET_NAME)
     k      = Key(bucket)
-    k.key  = filename
+    k.key  = name or filename
 
     k.set_contents_from_filename(filename)
 
 def get_file_from_s3(filename):
-    conn   = S3Connection(ACCESS_KEY, SECRET)
+    conn   = S3Connection(ACCESS_KEY, SECRET, calling_format=OrdinaryCallingFormat())
     bucket = conn.get_bucket(BUCKET_NAME)
     k      = Key(bucket)
     k.key  = filename
@@ -30,7 +31,7 @@ def get_file_from_s3(filename):
     k.get_contents_to_filename(filename)
 
 def list_backup_in_s3():
-    conn   = S3Connection(ACCESS_KEY, SECRET)
+    conn   = S3Connection(ACCESS_KEY, SECRET, calling_format=OrdinaryCallingFormat())
     bucket = conn.get_bucket(BUCKET_NAME)
 
     for i, key in enumerate(bucket.get_all_keys()):
@@ -38,7 +39,7 @@ def list_backup_in_s3():
 
 def delete_all_backups():
     #FIXME: validate filename exists
-    conn   = S3Connection(ACCESS_KEY, SECRET)
+    conn   = S3Connection(ACCESS_KEY, SECRET, calling_format=OrdinaryCallingFormat())
     bucket = conn.get_bucket(BUCKET_NAME)
 
     for i, key in enumerate(bucket.get_all_keys()):

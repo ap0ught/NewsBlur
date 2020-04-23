@@ -1,44 +1,66 @@
 import logging
 import re
 import string
+import time
+
 from django.core.handlers.wsgi import WSGIRequest
 from django.conf import settings
+from django.utils.encoding import smart_unicode
 
-class NullHandler(logging.Handler): #exists in python 3.1
+from user_functions import extract_user_agent
+from apps.statistics.rstats import RStats
+
+
+class NullHandler(logging.Handler):  # exists in python 3.1
     def emit(self, record):
         pass
+
 
 def getlogger():
     logger = logging.getLogger('newsblur')
     return logger
 
-def user(u, msg):
+
+def user(u, msg, request=None, warn_color=True):
+    msg = smart_unicode(msg)
+    if not u:
+        return debug(msg)
+
     platform = '------'
-    if isinstance(u, WSGIRequest):
-        request = u
-        u = request.user
-        user_agent = request.environ.get('HTTP_USER_AGENT', '')
-        if 'iPhone App' in user_agent:
-            platform = 'iPhone'
-        elif 'Blar' in user_agent:
-            platform = 'Blar'
-        elif 'MSIE' in user_agent:
-            platform = 'IE'
-        elif 'Chrome' in user_agent:
-            platform = 'Chrome'
-        elif 'Safari' in user_agent:
-            platform = 'Safari'
-        elif 'MeeGo' in user_agent:
-            platform = 'MeeGo'
-        elif 'Firefox' in user_agent:
-            platform = 'FF'
-        elif 'Opera' in user_agent:
-            platform = 'Opera'
-        elif 'WP7' in user_agent:
-            platform = 'WP7'
-    premium = '*' if u.is_authenticated() and u.profile.is_premium else ''
-    username = cipher(unicode(u)) if settings.CIPHER_USERNAMES else u
-    info(' ---> [~FB~SN%-6s~SB] [%s%s] %s' % (platform, username, premium, msg))
+    time_elapsed = ""
+    if isinstance(u, WSGIRequest) or request:
+        if not request:
+            request = u
+            u = request.user
+        platform = extract_user_agent(request)
+
+        if hasattr(request, 'start_time'):
+            seconds = time.time() - request.start_time
+            color = '~FB'
+            if warn_color:
+                if seconds >= 1:
+                    color = '~FR'
+                elif seconds > .2:
+                    color = '~SB~FK'
+            time_elapsed = "[%s%.4ss~SB] " % (
+                color,
+                seconds,
+            )
+    is_premium = u.is_authenticated() and u.profile.is_premium
+    premium = '*' if is_premium else ''
+    username = cipher(unicode(u)) if settings.CIPHER_USERNAMES else unicode(u)
+    info(' ---> [~FB~SN%-6s~SB] %s[%s%s] %s' % (platform, time_elapsed, username, premium, msg))
+    page_load_paths = [
+        "/reader/feed/",
+        "/social/stories/",
+        "/reader/river_stories/",
+        "/social/river_stories/"
+    ]
+    if request:
+        path = RStats.clean_path(request.path)
+        if path in page_load_paths:
+            RStats.add('page_load', duration=seconds)
+
 
 def cipher(msg):
     shift = len(msg)
@@ -47,26 +69,33 @@ def cipher(msg):
     translation_table = dict((ord(ic), oc) for ic, oc in zip(in_alphabet, out_alphabet))
 
     return msg.translate(translation_table)
-    
+
+
 def debug(msg):
+    msg = smart_unicode(msg)
     logger = getlogger()
     logger.debug(colorize(msg))
 
+
 def info(msg):
+    msg = smart_unicode(msg)
     logger = getlogger()
     logger.info(colorize(msg))
 
+
 def error(msg):
+    msg = smart_unicode(msg)
     logger = getlogger()
     logger.error(msg)
-    
+
+
 def colorize(msg):
     params = {
         r'\-\-\->'        : '~FB~SB--->~FW',
         r'\*\*\*>'        : '~FB~SB~BB--->~BT~FW',
         r'\['             : '~SB~FB[~SN~FM',
         r'AnonymousUser'  : '~FBAnonymousUser',
-        r'\*\]'           : '~SN~FR*]',
+        r'\*(\s*)~FB~SB\]'           : r'~SN~FR*\1~FB~SB]',
         r'\]'             : '~FB~SB]~FW~SN',
     }
     colors = {
@@ -97,11 +126,9 @@ def colorize(msg):
     for k, v in params.items():
         msg = re.sub(k, v, msg)
     msg = msg + '~ST~FW~BT'
-    msg = re.sub(r'(~[A-Z]{2})', r'%(\1)s', msg)
-    try:
-        msg = msg % colors
-    except (TypeError, ValueError, KeyError):
-        pass
+    # msg = re.sub(r'(~[A-Z]{2})', r'%(\1)s', msg)
+    for k, v in colors.items():
+        msg = msg.replace(k, v)
     return msg
     
 '''

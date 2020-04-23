@@ -1,26 +1,25 @@
-{% block body %}{% endblock body %}
-
-- Samuel Clay, @samuelclay
+{% load utils_tags %}{% block body %}{% endblock body %}
 
 -----------------------------------------------------------------------------
 
-Stay up to date and in touch with me, yr. developer, in a few different ways:
+NewsBlur is a personal news reader that brings people together to talk about the world. A new sound of an old instrument.
 
-    * Follow @samuelclay on Twitter: http://twitter.com/samuelclay/
-    * Follow @newsblur on Twitter: http://twitter.com/newsblur/
-    * Follow @samuelclay on GitHub: http://github.com/samuelclay/
+Stay up to date and in touch with a few different ways:
 
-{% block resources_header %}There are a few resources you can use if you end up loving NewsBlur:{% endblock resources_header %}
+    * Follow @newsblur on Twitter: https://twitter.com/newsblur
+    * Follow @samuelclay on GitHub: https://github.com/samuelclay
 
-    * Read the NewsBlur Blog: http://blog.newsblur.com
-    * Get support on NewsBlur's Get Satisfaction: http://getsatisfaction.com/newsblur/
+{% block resources_header %}To get the most out of NewsBlur, here are a few resources:{% endblock resources_header %}
 
-There's plenty of ways to use NewsBlur beyond the website:
+    * Read the NewsBlur Blog: https://blog.newsblur.com
+    * Get support on NewsBlur's support forum: https://forum.newsblur.com
 
-    * Download the free iPhone App: http://www.newsblur.com/iphone/
-    * Download the Android App on the Android Market: https://market.android.com/details?id=bitwrit.Blar
-    * Download browser extensions for Safari, Firefox, and Chrome: http://www.newsblur.com{{ user.profile.autologin_url }}?next=goodies
+There are plenty of ways to use NewsBlur beyond the website:
+
+    * Download the free iPad/iPhone App: https://{% current_domain %}/ios/
+    * Download the free Android App: https://{% current_domain %}/android/
+    * Download browser extensions for Safari, Firefox, and Chrome: https://{% current_domain %}{{ user.profile.autologin_url }}?next=goodies
 
 -----------------------------------------------------------------------------
 
-Don't want to be notified about anything NewsBlur related? Opt-out of emails from NewsBlur: http://www.newsblur.com{{ user.profile.autologin_url }}?next=optout
+Don't want to be notified about anything NewsBlur related? Opt-out of emails from NewsBlur: https://{% current_domain %}{{ user.profile.autologin_url }}?next=optout

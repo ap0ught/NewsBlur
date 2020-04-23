@@ -1,22 +1,125 @@
+import struct
 from django.contrib.sites.models import Site
-from django import template
 from django.conf import settings
-from utils.user_functions import get_user
+from django import template
+from apps.reader.forms import FeatureForm
+from apps.reader.models import Feature
+from apps.social.models import MSocialProfile
 from vendor.timezones.utilities import localtime_for_timezone
+from utils.user_functions import get_user
 
 register = template.Library()
 
 @register.simple_tag
-def current_domain():
+def current_domain(dev=False, strip_www=False):
     current_site = Site.objects.get_current()
-    return current_site and current_site.domain
+    domain = current_site and current_site.domain
+    if dev and settings.SERVER_NAME in ["dev"] and domain:
+        domain = domain.replace("www", "dev")
+    if strip_www:
+        domain = domain.replace("www.", "")
+    return domain
 
 @register.simple_tag(takes_context=True)
 def localdatetime(context, date, date_format):
     user = get_user(context['user'])
     date = localtime_for_timezone(date, user.profile.timezone).strftime(date_format)
     return date
-        
+    
+@register.inclusion_tag('reader/feeds_skeleton.xhtml', takes_context=True)
+def render_feeds_skeleton(context):
+    user = get_user(context['user'])
+    social_profile = MSocialProfile.get_user(user.pk)
+
+    return {
+        'user': user,
+        'social_profile': social_profile,
+        'MEDIA_URL': settings.MEDIA_URL,
+    }
+
+@register.inclusion_tag('reader/features_module.xhtml', takes_context=True)
+def render_features_module(context):
+    user         = get_user(context['user'])
+    features     = Feature.objects.all()[:3]
+    feature_form = FeatureForm() if user.is_staff else None
+
+    return {
+        'user': user,
+        'features': features,
+        'feature_form': feature_form,
+    }
+          
+@register.inclusion_tag('reader/recommended_users.xhtml', takes_context=True)
+def render_recommended_users(context):
+    user    = get_user(context['user'])
+    profile = MSocialProfile.profile(user.pk)
+
+    return {
+        'user': user,
+        'profile': profile,
+    }
+
+@register.inclusion_tag('reader/getting_started.xhtml', takes_context=True)
+def render_getting_started(context):
+    user    = get_user(context['user'])
+    profile = MSocialProfile.profile(user.pk)
+
+    return {
+        'user': user,
+        'user_profile': user.profile,
+        'social_profile': profile,
+    }
+
+@register.inclusion_tag('reader/account_module.xhtml', takes_context=True)
+def render_account_module(context):
+    user    = get_user(context['user'])
+
+    return {
+        'user': user,
+        'user_profile': user.profile,
+        'social_profile': context['social_profile'],
+        'feed_count': context['feed_count'],
+    }
+    
+@register.inclusion_tag('reader/manage_module.xhtml', takes_context=True)
+def render_manage_module(context):
+    user    = get_user(context['user'])
+
+    return {
+        'user': user,
+        'user_profile': user.profile,
+    }
+    
+@register.inclusion_tag('reader/footer.xhtml', takes_context=True)
+def render_footer(context, page=None):
+    return {
+        'page': page,
+        'MEDIA_URL': settings.MEDIA_URL,
+    }
+
+@register.filter
+def get(h, key):
+    print h, key
+    return h[key]
+
+@register.filter
+def hex2rgba(hex, alpha):
+    colors = struct.unpack('BBB', hex.decode('hex'))
+    return "rgba(%s, %s, %s, %s)" % (colors[0], colors[1], colors[2], alpha)
+    
+@register.filter
+def rgb2rgba(rgb, alpha):
+    rgb = rgb.replace('rgb', 'rgba')
+    rgb = rgb.replace(')', ", %s)" % alpha)
+    return rgb
+
+@register.filter
+def color2rgba(color, alpha):
+    if "#" in color:
+        return hex2rgba(color, alpha)
+    elif "rgb" in color:
+        return rgb2rgba(color, alpha)
+    
 @register.filter
 def get_range( value ):
     """

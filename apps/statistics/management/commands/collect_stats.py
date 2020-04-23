@@ -8,3 +8,4 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         MStatistics.collect_statistics()
+        

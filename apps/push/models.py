@@ -7,16 +7,18 @@ import re
 
 from django.conf import settings
 from django.db import models
-from django.utils.hashcompat import sha_constructor
+import hashlib
 
 from apps.push import signals
 from apps.rss_feeds.models import Feed
 from utils import log as logging
+from utils.feed_functions import timelimit, TimeoutError
 
-DEFAULT_LEASE_SECONDS = 2592000 # 30 days in seconds
+DEFAULT_LEASE_SECONDS = (10 * 24 * 60 * 60)  # 10 days
 
 class PushSubscriptionManager(models.Manager):
-
+    
+    @timelimit(5)
     def subscribe(self, topic, feed, hub=None, callback=None,
                   lease_seconds=None, force_retry=False):
         if hub is None:
@@ -29,6 +31,7 @@ class PushSubscriptionManager(models.Manager):
             lease_seconds = getattr(settings, 'PUBSUBHUBBUB_LEASE_SECONDS',
                                    DEFAULT_LEASE_SECONDS)
 
+        feed = Feed.get_by_id(feed.pk)
         subscription, created = self.get_or_create(feed=feed)
         signals.pre_subscribe.send(sender=subscription, created=created)
         subscription.set_expiration(lease_seconds)
@@ -48,29 +51,32 @@ class PushSubscriptionManager(models.Manager):
             #     # callback = 'http://' + Site.objects.get_current() + callback_path
             callback = "http://push.newsblur.com/push/%s" % subscription.pk # + callback_path
 
-        response = self._send_request(hub, {
-            'hub.mode'          : 'subscribe',
-            'hub.callback'      : callback,
-            'hub.topic'         : topic,
-            'hub.verify'        : ['async', 'sync'],
-            'hub.verify_token'  : subscription.generate_token('subscribe'),
-            'hub.lease_seconds' : lease_seconds,
-        })
+        try:
+            response = self._send_request(hub, {
+                'hub.mode'          : 'subscribe',
+                'hub.callback'      : callback,
+                'hub.topic'         : topic,
+                'hub.verify'        : ['async', 'sync'],
+                'hub.verify_token'  : subscription.generate_token('subscribe'),
+                'hub.lease_seconds' : lease_seconds,
+            })
+        except (requests.ConnectionError, requests.exceptions.MissingSchema):
+            response = None
 
-        if response.status_code == 204:
+        if response and response.status_code == 204:
             subscription.verified = True
-        elif response.status_code == 202: # async verification
+        elif response and response.status_code == 202: # async verification
             subscription.verified = False
         else:
-            error = response.content
+            error = response and response.text or ""
             if not force_retry and 'You may only subscribe to' in error:
                 extracted_topic = re.search("You may only subscribe to (.*?) ", error)
                 if extracted_topic:
                     subscription = self.subscribe(extracted_topic.group(1), 
                                                   feed=feed, hub=hub, force_retry=True)
             else:
-                logging.debug(u'   ---> [%-30s] ~FR~BKFeed failed to subscribe to push: %s' % (
-                              unicode(subscription.feed)[:30], error))
+                logging.debug(u'   ---> [%-30s] ~FR~BKFeed failed to subscribe to push: %s (code: %s)' % (
+                              unicode(subscription.feed)[:30], error[:100], response and response.status_code))
 
         subscription.save()
         feed.setup_push()
@@ -116,7 +122,7 @@ class PushSubscription(models.Model):
     def generate_token(self, mode):
         assert self.pk is not None, \
             'Subscription must be saved before generating token'
-        token = mode[:20] + sha_constructor('%s%i%s' % (
+        token = mode[:20] + hashlib.sha1('%s%i%s' % (
                 settings.SECRET_KEY, self.pk, mode)).hexdigest()
         self.verify_token = token
         self.save()
@@ -135,7 +141,10 @@ class PushSubscription(models.Model):
                     hub_url = link['href']
                 elif link['rel'] == 'self':
                     self_url = link['href']
-
+            
+            if hub_url and hub_url.startswith('//'):
+                hub_url = "http:%s" % hub_url
+            
             needs_update = False
             if hub_url and self.hub != hub_url:
                 # hub URL has changed; let's update our subscription
@@ -149,9 +158,14 @@ class PushSubscription(models.Model):
                               unicode(self.feed)[:30], hub_url, self_url))
                 expiration_time = self.lease_expires - datetime.now()
                 seconds = expiration_time.days*86400 + expiration_time.seconds
-                PushSubscription.objects.subscribe(
-                    self_url, feed=self.feed, hub=hub_url,
-                    lease_seconds=seconds)
+                try:
+                    PushSubscription.objects.subscribe(
+                        self_url, feed=self.feed, hub=hub_url,
+                        lease_seconds=seconds)
+                except TimeoutError:
+                    logging.debug(u'   ---> [%-30s] ~FR~BKTimed out updating PuSH hub/topic: %s / %s' % (
+                                  unicode(self.feed)[:30], hub_url, self_url))
+                    
                     
     def __unicode__(self):
         if self.verified:

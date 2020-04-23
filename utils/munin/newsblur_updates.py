@@ -1,34 +1,44 @@
-#!/usr/bin/env python 
+#!/srv/newsblur/venv/newsblur/bin/python
 import redis
 from utils.munin.base import MuninGraph
 
-graph_config = {
-    'graph_category' : 'NewsBlur',
-    'graph_title' : 'NewsBlur Updates',
-    'graph_vlabel' : '# of updates',
-    'update_queue.label': 'Queued Feeds last hour',
-    'feeds_fetched.label': 'Fetched feeds last hour',
-    'celery_update_feeds.label': 'Celery - Update Feeds',
-    'celery_new_feeds.label': 'Celery - New Feeds',
-    'celery_push_feeds.label': 'Celery - Push Feeds',
-}
+class NBMuninGraph(MuninGraph):
+
+    @property
+    def graph_config(self):
+        return {
+            'graph_category' : 'NewsBlur',
+            'graph_title' : 'NewsBlur Updates',
+            'graph_vlabel' : '# of updates',
+            'graph_args' : '-l 0',
+            'update_queue.label': 'Queued Feeds',
+            'feeds_fetched.label': 'Fetched feeds last hour',
+            'tasked_feeds.label': 'Tasked Feeds',
+            'error_feeds.label': 'Error Feeds',
+            'celery_update_feeds.label': 'Celery - Update Feeds',
+            'celery_new_feeds.label': 'Celery - New Feeds',
+            'celery_push_feeds.label': 'Celery - Push Feeds',
+            'celery_work_queue.label': 'Celery - Work Queue',
+            'celery_search_queue.label': 'Celery - Search Queue',
+        }
 
 
-def calculate_metrics():
-    import datetime
-    from apps.rss_feeds.models import Feed
-    from django.conf import settings
+    def calculate_metrics(self):
+        from django.conf import settings
     
-    hour_ago = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
-    r = redis.Redis(connection_pool=settings.REDIS_POOL)    
+        r = redis.Redis(connection_pool=settings.REDIS_FEED_UPDATE_POOL)
 
-    return {
-        'update_queue': Feed.objects.filter(queued_date__gte=hour_ago).count(),
-        'feeds_fetched': Feed.objects.filter(last_update__gte=hour_ago).count(),
-        'celery_update_feeds': r.llen("update_feeds"),
-        'celery_new_feeds': r.llen("new_feeds"),
-        'celery_push_feeds': r.llen("push_feeds"),
-    }
+        return {
+            'update_queue': r.scard("queued_feeds"),
+            'feeds_fetched': r.zcard("fetched_feeds_last_hour"),
+            'tasked_feeds': r.zcard("tasked_feeds"),
+            'error_feeds': r.zcard("error_feeds"),
+            'celery_update_feeds': r.llen("update_feeds"),
+            'celery_new_feeds': r.llen("new_feeds"),
+            'celery_push_feeds': r.llen("push_feeds"),
+            'celery_work_queue': r.llen("work_queue"),
+            'celery_search_queue': r.llen("search_indexer") + r.llen("search_indexer_tasker"),
+        }
 
 if __name__ == '__main__':
-    MuninGraph(graph_config, calculate_metrics).run()
+    NBMuninGraph().run()

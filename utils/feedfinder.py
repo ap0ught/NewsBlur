@@ -102,7 +102,7 @@ class URLGatekeeper:
         _debuglog("gatekeeper of %s says %s" % (url, allow))
         return allow
 
-    def get(self, url, check=True):
+    def get(self, url, check=False):
         if check and not self.can_fetch(url): return ''
         try:
             return requests.get(url, headers=dict(self.urlopener.addheaders)).content
@@ -221,7 +221,7 @@ def isFeed(uri):
     protocol = urlparse.urlparse(uri)
     if protocol[0] not in ('http', 'https'): return 0
     try:
-        data = _gatekeeper.get(uri)
+        data = _gatekeeper.get(uri, check=False)
     except (KeyError, UnicodeDecodeError):
         return False
     count = couldBeFeedData(data)

@@ -1,9 +1,17 @@
 {% extends "mail/email_base.txt" %}
 
+{% load utils_tags %}
+
 {% block body %}Welcome to NewsBlur, {{ user.username }}.
 
-OK, firstly, thank you for trying out new software. It's not quite what you're used to, but you might find NewsBlur to be a perfect fit. There's a lot packed into a minimal interface.
+OK, firstly, thank you for trying out NewsBlur. I hope NewsBlur can make your daily reading more personal and intelligent.
 
-Spend a few days trying out NewsBlur. I hope you end up loving it.
+Here are some easy ways to have a great time on NewsBlur:
 
-If you really do love using NewsBlur you should purchase a fancy <b>premium account</b> for only $12/year (nights and weekends and all major public holidays included). You get to support an independent developer, help feed his dog, and contribute to the long-term health of NewsBlur.{% endblock body %}
+    * Follow friends from Twitter, Facebook, and NewsBlur: https://{% current_domain %}{{ user.profile.autologin_url }}?next=friends
+    * Visit the popular blurblog, The People Have Spoken: https://popular.newsblur.com
+    * Upgrade to a premium account for only $36/year: https://{% current_domain %}{{ user.profile.autologin_url }}?next=chooser
+
+I made NewsBlur because I wanted a better way to read the news and talk about it with people. I hope you love it, too.
+
+- Sam Clay{% endblock body %}

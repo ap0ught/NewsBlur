@@ -2,16 +2,17 @@ import os
 import sys
 import shutil
 
-CURRENT_DIR  = os.path.dirname(os.getcwd())
+CURRENT_DIR  = os.path.dirname(__file__)
 NEWSBLUR_DIR = ''.join([CURRENT_DIR, '/../../'])
 sys.path.insert(0, NEWSBLUR_DIR)
 os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
 
 import time
 import s3
-from django.conf import settings
 
-COLLECTIONS = "classifier_tag classifier_author classifier_feed classifier_title userstories starred_stories"
+COLLECTIONS = "classifier_tag classifier_author classifier_feed classifier_title userstories shared_stories category category_site sent_emails social_profile social_subscription social_services statistics user_search feedback"
+if False:
+    COLLECTIONS += " starred_stories"
 
 date = time.strftime('%Y-%m-%d-%H-%M')
 collections = COLLECTIONS.split(' ')
@@ -26,10 +27,14 @@ for collection in collections:
     print "Dumping %s: %s" % (collection, cmd)
     os.system(cmd)
 
-cmd = 'tar -jcf %s %s' % (filename, dir_name)
+print "Compressing %s..." % filename
+cmd = 'tar -zcf %s %s' % (filename, dir_name)
 os.system(cmd)
 
 print 'Uploading %s to S3...' % filename
-s3.save_file_in_s3(filename)
+try:
+    s3.save_file_in_s3(filename, name="mongo/%s" % (filename))
+except Exception, e:
+    print " ****> Exceptions: %s" % e
 shutil.rmtree(dir_name)
 os.remove(filename)
